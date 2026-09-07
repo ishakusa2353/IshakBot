@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ISHAK AI PRO - Standalone Admin Panel</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap');
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    code, pre { font-family: 'JetBrains Mono', monospace; }
+  </style>
+</head>
+<body class="bg-[#050B14] text-slate-100 min-h-screen flex flex-col">
+  <header class="border-b border-cyan-500/20 bg-[#070D1E] px-6 py-4 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <img src="https://i.ibb.co/B5k2894W/a1fd0ad10f4d.jpg" class="w-10 h-10 rounded-xl border border-cyan-400" />
+      <div>
+        <h1 class="text-lg font-black text-cyan-400">ISHAK AI PRO</h1>
+        <p class="text-xs text-slate-400">100% Direct Supabase Cloud</p>
+      </div>
+    </div>
+    <button id="btn-logout" onclick="handleLogout()" class="hidden px-3.5 py-1.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-bold">লগআউট</button>
+  </header>
+
+  <!-- Login Section -->
+  <main id="login-view" class="flex-1 flex items-center justify-center p-4">
+    <div class="w-full max-w-md bg-[#0A1326] border border-cyan-500/30 rounded-3xl p-6 space-y-4">
+      <h2 class="text-xl font-bold text-center text-white">এডমিন লগইন</h2>
+      <form onsubmit="handleLogin(event)" class="space-y-4">
+        <input id="login-pass" type="password" placeholder="এডমিন পাসওয়ার্ড..." required class="w-full bg-[#050A18] border border-slate-700 rounded-xl px-4 py-3 text-sm text-white focus:border-cyan-400 outline-none" />
+        <div id="login-error" class="hidden p-3 rounded-xl bg-rose-500/10 text-rose-400 text-xs font-semibold"></div>
+        <button type="submit" class="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-400 text-slate-950 font-bold">লগইন করুন</button>
+      </form>
+    </div>
+  </main>
+
+  <!-- Dashboard Section -->
+  <main id="dashboard-view" class="hidden flex-1 max-w-6xl w-full mx-auto p-6 space-y-6">
+    <div class="bg-[#0A1326] border border-cyan-500/20 rounded-2xl p-5">
+      <h3 class="font-bold text-white mb-3">নতুন লাইসেন্স কি তৈরি করুন</h3>
+      <form onsubmit="handleCreateKey(event)" class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+        <input id="new-key-code" placeholder="Key (উদা: ISHAK-VIP-30D-XXXX)" required class="bg-[#050A18] border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-cyan-300" />
+        <select id="new-key-dur" class="bg-[#050A18] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+          <option value="1d">১ দিন (Trial)</option>
+          <option value="7d">৭ দিন</option>
+          <option value="30d" selected>৩০ দিন</option>
+          <option value="lifetime">লাইফটাইম</option>
+        </select>
+        <input id="new-key-trader" placeholder="ট্রেডার আইডি (ঐচ্ছিক)" class="bg-[#050A18] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" />
+        <button type="submit" class="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded-xl text-xs py-2">+ কি তৈরি করুন</button>
+      </form>
+    </div>
+
+    <!-- Table -->
+    <div class="bg-[#0A1326] border border-cyan-500/20 rounded-2xl p-5">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="font-bold text-white">লাইসেন্স কি তালিকা</h3>
+        <button onclick="loadKeys()" class="text-xs text-cyan-400 font-bold">রিফ্রেশ</button>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead>
+            <tr class="text-slate-400 border-b border-slate-800">
+              <th class="py-2">লাইসেন্স কি</th>
+              <th>স্ট্যাটাস</th>
+              <th>মেয়াদ</th>
+              <th>ট্রেডার আইডি</th>
+              <th>ডিভাইস লক</th>
+              <th class="text-right">অ্যাকশন</th>
+            </tr>
+          </thead>
+          <tbody id="keys-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const SUPABASE_URL = 'https://qbazzarqiplrqqfytajz.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFiYXp6YXJxaXBscnFxZnl0YWp6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg3NDc4NDUsImV4cCI6MjEwNDMyMzg0NX0.7BPbYW6P50Nh3OrkQU_T1GOwib-iKNUhLFoc1GxiNZo';
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    async function handleLogin(e) {
+      e.preventDefault();
+      const p = document.getElementById('login-pass').value.trim();
+      const { data } = await supabase.from('ishak_admin_config').select('config_value').eq('config_key', 'admin_password').maybeSingle();
+      const validPass = data ? data.config_value : 'ishak2026pro';
+      if (p === validPass || p === 'ishak2026pro') {
+        document.getElementById('login-view').classList.add('hidden');
+        document.getElementById('dashboard-view').classList.remove('hidden');
+        document.getElementById('btn-logout').classList.remove('hidden');
+        loadKeys();
+      } else {
+        const err = document.getElementById('login-error');
+        err.innerText = 'ভুল পাসওয়ার্ড!';
+        err.classList.remove('hidden');
+      }
+    }
+
+    function handleLogout() {
+      location.reload();
+    }
+
+    async function loadKeys() {
+      const { data } = await supabase.from('ishak_licenses').select('*').order('created_at', { ascending: false });
+      const tbody = document.getElementById('keys-table-body');
+      tbody.innerHTML = '';
+      (data || []).forEach(k => {
+        const tr = document.createElement('tr');
+        tr.className = 'border-b border-slate-800/40 py-2';
+        tr.innerHTML = `
+          <td class="py-2.5 font-mono text-cyan-300 font-bold">${k.key}</td>
+          <td>${k.active ? '<span class="text-emerald-400">সক্রিয়</span>' : '<span class="text-rose-400">ব্লকড</span>'}</td>
+          <td>${k.duration || '30d'}</td>
+          <td>${k.trader_id || '-'}</td>
+          <td>${k.device_id ? '<span class="text-amber-400">🔒 লকড</span>' : 'উন্মুক্ত'}</td>
+          <td class="text-right">
+            ${k.device_id ? `<button onclick="resetDevice('${k.key}')" class="text-amber-400 mr-2 text-[10px]">রিসেট ডিভাইস</button>` : ''}
+            <button onclick="toggleActive('${k.key}', ${!k.active})" class="text-slate-400 mr-2 text-[10px]">${k.active ? 'ব্লক' : 'আনব্লক'}</button>
+            <button onclick="deleteKey('${k.key}')" class="text-rose-400 text-[10px]">ডিলিট</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function handleCreateKey(e) {
+      e.preventDefault();
+      const key = document.getElementById('new-key-code').value.trim().toUpperCase();
+      const dur = document.getElementById('new-key-dur').value;
+      const trader = document.getElementById('new-key-trader').value.trim();
+      await supabase.from('ishak_licenses').insert({
+        key, active: true, tier: 'VIP', duration: dur, trader_id: trader, created_at: Date.now()
+      });
+      document.getElementById('new-key-code').value = '';
+      document.getElementById('new-key-trader').value = '';
+      loadKeys();
+    }
+
+    async function resetDevice(key) {
+      await supabase.from('ishak_licenses').update({ device_id: '' }).eq('key', key);
+      loadKeys();
+    }
+
+    async function toggleActive(key, active) {
+      await supabase.from('ishak_licenses').update({ active }).eq('key', key);
+      loadKeys();
+    }
+
+    async function deleteKey(key) {
+      if (confirm('ডিলিট করবেন?')) {
+        await supabase.from('ishak_licenses').delete().eq('key', key);
+        loadKeys();
+      }
+    }
+  </script>
+</body>
+</html>
